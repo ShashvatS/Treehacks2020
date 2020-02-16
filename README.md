@@ -1,0 +1,1 @@
+Note: before running models through iteratexgboost.py / demo.iynb, need to generate appropriate data csv files through clean_daily_returns.iynb
