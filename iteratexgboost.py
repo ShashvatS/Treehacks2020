@@ -147,16 +147,10 @@ def print_test_model(forward, models, n_sample):
         y = np.exp(y) - np.exp(1)
         print(y, pred, y / pred)
 
-cacheXY = None
 def graph_model(forward, models, n_sample):
     df = get_data()
     train, test = get_train_test(df, forward)
-    global cacheXY
-    if not cacheXY:
-        X, Y = get_XY(df, forward, train, test, models[:-1])
-        cacheXY = X, Y
-    else:
-        X, Y = cacheXY
+    X, Y = get_XY(df, forward, train, test, models[:-1])
     model = models[-1]
 
     print("revenue", "predicted", "diff-factor")
@@ -234,10 +228,10 @@ if __name__ == "__main__":
 
     models = load_models(forward_values, file_prefix)
     # print_test_model(ONE_YEAR, models, 100)
-    median = evaluate_model(ONE_YEAR, models)
-    print(median)
+    # median = evaluate_model(ONE_YEAR, models)
+    # print(median)
 
-    # graph_model(ONE_YEAR, models, 1000)
+    graph_model(ONE_YEAR, models, 1000)
 
 
 
