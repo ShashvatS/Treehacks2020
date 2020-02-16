@@ -135,6 +135,7 @@ def print_test_model(forward, models, n_sample):
     X, Y = get_XY(df, forward, train, test, models[:-1])
     model = models[-1]
 
+    print("revenue", "predicted", "diff-factor")
     for _ in range(n_sample):
         r = random.randrange(0, X[1].shape[1])
         x, y = X[1][[r]], Y[1][[r]]
@@ -143,6 +144,26 @@ def print_test_model(forward, models, n_sample):
         pred = np.exp(pred) - np.exp(1)
         y = np.exp(y) - np.exp(1)
         print(y, pred, y / pred)
+
+def evaluate_model(forward, models):
+    df = get_data()
+    train, test = get_train_test(df, forward)
+    X, Y = get_XY(df, forward, train, test, models[:-1])
+    model = models[-1]
+
+    x, y = X[1], Y[1]
+    pred = model.predict(x)[0] + x[:, -2 if len(models) != 1 else -1]
+    pred = np.exp(pred) - np.exp(1)
+    y = y + x[:, -2 if len(models) != 1 else -1]
+    y = np.exp(y) - np.exp(1)
+
+    diff = y / pred
+    for i in range(len(diff)):
+        if y[i] != 0:
+            diff[i] = max(diff[i], pred[i] / y[i])
+
+    ans = np.median(diff)
+    return ans
 
 if __name__ == "__main__":
     # train_model(ONE_YEAR, "m1.model")
@@ -174,7 +195,9 @@ if __name__ == "__main__":
     # iterated_model(forward_values, file_prefix)
 
     models = load_models(forward_values, file_prefix)
-    print_test_model(ONE_YEAR, models, 100)
+    # print_test_model(ONE_YEAR, models, 100)
+    median = evaluate_model(ONE_YEAR, models)
+    print(median)
 
 
 
