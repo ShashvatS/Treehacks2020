@@ -5,12 +5,14 @@ import random
 from sklearn.metrics import mean_squared_error
 from xgboost import XGBRegressor
 import pickle
+import matplotlib.pyplot as plt
 
 ONE_YEAR = 261 
 MAX_PERIOD = ONE_YEAR
 
 def get_data():
     df = pd.read_csv("daily_returns4.csv")
+    df = df.drop(columns = ["PERMNO", "BIDLO", "ASKHI", "BID", "ASK", 'gvkey', 'fyearq'])
     df = df.set_index(['TICKER', "date"])
     df.sort_index(inplace = True)
 
@@ -145,6 +147,42 @@ def print_test_model(forward, models, n_sample):
         y = np.exp(y) - np.exp(1)
         print(y, pred, y / pred)
 
+cacheXY = None
+def graph_model(forward, models, n_sample):
+    df = get_data()
+    train, test = get_train_test(df, forward)
+    global cacheXY
+    if not cacheXY:
+        X, Y = get_XY(df, forward, train, test, models[:-1])
+        cacheXY = X, Y
+    else:
+        X, Y = cacheXY
+    model = models[-1]
+
+    print("revenue", "predicted", "diff-factor")
+    predicted = []
+    actual = []
+    for _ in range(n_sample):
+        r = random.randrange(0, X[1].shape[1])
+        x, y = X[1][[r]], Y[1][[r]]
+        pred = model.predict(x)[0] + x[:, -2 if len(models) != 1 else -1]
+        y = y + x[:, -2 if len(models) != 1 else -1]
+        pred = np.exp(pred) - np.exp(1)
+        y = np.exp(y) - np.exp(1)
+        # print(y, pred, y / pred)
+        predicted.append(pred[0])
+        actual.append(y[0])
+
+    predicted = np.array(predicted)
+    actual = np.array(actual)
+
+    plt.scatter(actual, predicted, color = 'red', label = "Predicted returns")
+    plt.plot(actual, actual, label = "Actual Returns")
+    plt.xlabel("Actual Returns")
+    plt.title("Actual Returns Versus Predicted Returns")
+    plt.legend()
+    plt.show()
+
 def evaluate_model(forward, models):
     df = get_data()
     train, test = get_train_test(df, forward)
@@ -189,7 +227,7 @@ if __name__ == "__main__":
     if ONE_YEAR not in forward_values:
         forward_values.append(ONE_YEAR)
 
-    file_prefix = "models/iterate_{}".format(skip)
+    file_prefix = "models2/iterate2_{}".format(skip)
     print(file_prefix)
 
     # iterated_model(forward_values, file_prefix)
@@ -198,6 +236,8 @@ if __name__ == "__main__":
     # print_test_model(ONE_YEAR, models, 100)
     median = evaluate_model(ONE_YEAR, models)
     print(median)
+
+    # graph_model(ONE_YEAR, models, 1000)
 
 
 
