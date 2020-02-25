@@ -10,6 +10,12 @@ import matplotlib.pyplot as plt
 ONE_YEAR = 261 
 MAX_PERIOD = ONE_YEAR
 
+FINAL_MODEL = False
+
+def set_final_model(toggle):
+    global FINAL_MODEL
+    FINAL_MODEL = toggle
+
 def get_data():
     df = pd.read_csv("daily_returns4.csv")
     df = df.drop(columns = ["PERMNO", "BIDLO", "ASKHI", "BID", "ASK", 'gvkey', 'fyearq'])
@@ -24,6 +30,7 @@ def get_data():
     return df
 
 def get_train_test(df, forward):
+    print("final model: ", FINAL_MODEL)
     forward = MAX_PERIOD
 
     s = set([])
@@ -34,12 +41,15 @@ def get_train_test(df, forward):
             s.add(idx[0])
     s = list(s)
 
-    np.random.seed(0)
+    # np.random.seed(0)
     np.random.shuffle(s)
 
-    train = s[:4 * len(s) // 5]
-    test = s[4 * len(s) // 5:]
-    s = set(s)
+    if FINAL_MODEL:
+        train = s
+        test = list(s)
+    else:
+        train = s[:4 * len(s) // 5]
+        test = s[4 * len(s) // 5:]
 
     return train, test
 
@@ -51,20 +61,36 @@ def get_XY(df, forward, train, test, prev_models = None):
         for row in tqdm(df.iterrows()):
             idx = row[0]
 
-            train_test = -1
-            if idx[0] in train:
-                train_test = 0
-            elif idx[0] in test:
-                train_test = 1
-            else:
-                continue
+            if FINAL_MODEL:
+                train_tests = []
+                if idx[0] in train:
+                    train_tests.append(0)
+                if idx[0] in test:
+                    train_tests.append(1)
 
-            nxtidx = (idx[0], idx[1] + forward)
-            if nxtidx in df.index:
-                Y[train_test].append(df.at[nxtidx, "modrevtq"] - row[1]["modrevtq"])
-                x = np.asarray(row[1], dtype='float64')
-                x = np.nan_to_num(x)
-                X[train_test].append(x)
+                for train_test in train_tests:
+                    nxtidx = (idx[0], idx[1] + forward)
+                    if nxtidx in df.index:
+                        Y[train_test].append(df.at[nxtidx, "modrevtq"] - row[1]["modrevtq"])
+                        x = np.asarray(row[1], dtype='float64')
+                        x = np.nan_to_num(x)
+                        X[train_test].append(x)
+
+            else:
+                train_test = -1
+                if idx[0] in train:
+                    train_test = 0
+                elif idx[0] in test:
+                    train_test = 1
+                else:
+                    continue
+
+                nxtidx = (idx[0], idx[1] + forward)
+                if nxtidx in df.index:
+                    Y[train_test].append(df.at[nxtidx, "modrevtq"] - row[1]["modrevtq"])
+                    x = np.asarray(row[1], dtype='float64')
+                    x = np.nan_to_num(x)
+                    X[train_test].append(x)
 
         for i in range(2):
             X[i] = np.asarray(X[i])
@@ -99,6 +125,26 @@ def get_XY(df, forward, train, test, prev_models = None):
 
         return X, Y
    
+
+def get_final_X(df, forward, prev_models = None):
+    if prev_models == None:
+        X = []
+
+        for row in tqdm(df.iterrows()):
+            idx = row[0]
+
+            nxtidx = (idx[0], idx[1] + forward)
+            if nxtidx not in df.index:
+                x = np.asarray(row[1], dtype='float64')
+                X.append(x)
+
+        X = np.array(X)
+        return X
+
+    else:
+        raise NotImplementedError
+
+   
 def train_model(forward, filename, prev_models = None):
     df = get_data()
     train, test = get_train_test(df, forward)
@@ -107,6 +153,7 @@ def train_model(forward, filename, prev_models = None):
     xgbmodel = XGBRegressor(objective='reg:squarederror', n_estimators = 100)
     xgbmodel.fit(X[0], Y[0], verbose = True)
 
+
     print(mean_squared_error(xgbmodel.predict(X[1]), Y[1]))
     print(np.exp(np.sqrt(mean_squared_error(xgbmodel.predict(X[1]), Y[1]))))
 
@@ -114,6 +161,8 @@ def train_model(forward, filename, prev_models = None):
     
     return xgbmodel
 
+# conclusion: not much better (if at all) than just training a model normally
+# do not use for final model then
 def iterated_model(forward_values, file_prefix):
     cur_models = None
     file_names = ["{}_{}.model".format(file_prefix, i) for i in forward_values]
@@ -198,7 +247,13 @@ def evaluate_model(forward, models):
     return ans
 
 if __name__ == "__main__":
-    # train_model(ONE_YEAR, "m1.model")
+    if True:
+        train_model(ONE_YEAR, "models/m3_{}.model".format(ONE_YEAR))
+        models = load_models([ONE_YEAR], "models/m3")
+        # print_test_model(ONE_YEAR, models, 100)
+        print(evaluate_model(ONE_YEAR, models))
+
+
     # iterated_model([ONE_YEAR // 2, ONE_YEAR], "iterate")
     # models = load_models([ONE_YEAR // 2, ONE_YEAR], "iterate")
     # print_test_model(ONE_YEAR, models, 100)
@@ -221,17 +276,17 @@ if __name__ == "__main__":
     if ONE_YEAR not in forward_values:
         forward_values.append(ONE_YEAR)
 
-    file_prefix = "models2/iterate2_{}".format(skip)
+    file_prefix = "models/iterate3_{}".format(skip)
     print(file_prefix)
 
     # iterated_model(forward_values, file_prefix)
 
     models = load_models(forward_values, file_prefix)
     # print_test_model(ONE_YEAR, models, 100)
-    # median = evaluate_model(ONE_YEAR, models)
-    # print(median)
+    median = evaluate_model(ONE_YEAR, models)
+    print(median)
 
-    graph_model(ONE_YEAR, models, 1000)
+    # graph_model(ONE_YEAR, models, 1000)
 
 
 
